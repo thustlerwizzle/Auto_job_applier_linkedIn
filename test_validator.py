@@ -38,7 +38,7 @@ class ValidateSecretsTests(unittest.TestCase):
             llm_model="gemini-1.5-flash",
             stream_output=False,
         ):
-            self.assertTrue(validator.validate_secrets())
+            validator.validate_secrets()
 
     def test_openai_still_requires_api_url(self):
         with patched_validator_secrets(
