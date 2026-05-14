@@ -19,9 +19,6 @@ import csv
 import re
 import pyautogui
 
-# Set CSV field size limit to prevent field size errors
-csv.field_size_limit(1000000)  # Set to 1MB instead of default 131KB
-
 from random import choice, shuffle, randint
 from datetime import datetime
 
@@ -41,6 +38,8 @@ from config.settings import *
 from modules.open_chrome import *
 from modules.helpers import *
 from modules.clickers_and_finders import *
+from modules.csv_utils import raise_csv_field_size_limit
+from modules.search_utils import next_date_posted_filter
 from modules.validator import validate_config
 from modules.ai.openaiConnections import ai_create_openai_client, ai_extract_skills, ai_answer_question, ai_close_openai_client
 from modules.ai.deepseekConnections import deepseek_create_client, deepseek_extract_skills, deepseek_answer_question
@@ -50,6 +49,7 @@ from typing import Literal
 
 
 pyautogui.FAILSAFE = False
+raise_csv_field_size_limit()
 # if use_resume_generator:    from resume_generator import is_logged_in_GPT, login_GPT, open_resume_chat, create_custom_resume
 
 
@@ -1173,9 +1173,8 @@ def main() -> None:
         total_runs = run(total_runs)
         while(run_non_stop):
             if cycle_date_posted:
-                date_options = ["Any time", "Past month", "Past week", "Past 24 hours"]
                 global date_posted
-                date_posted = date_options[date_options.index(date_posted)+1 if date_options.index(date_posted)+1 > len(date_options) else -1] if stop_date_cycle_at_24hr else date_options[0 if date_options.index(date_posted)+1 >= len(date_options) else date_options.index(date_posted)+1]
+                date_posted = next_date_posted_filter(date_posted, stop_date_cycle_at_24hr)
             if alternate_sortby:
                 global sort_by
                 sort_by = "Most recent" if sort_by == "Most relevant" else "Most relevant"
