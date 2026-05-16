@@ -25,6 +25,7 @@ from pyautogui import alert
 from pprint import pprint
 
 from config.settings import logs_folder_path
+from modules.csv_utils import stringify_for_csv
 
 
 
@@ -228,22 +229,8 @@ def convert_to_json(data) -> dict:
 
 def truncate_for_csv(data, max_length: int = 131000, suffix: str = "...[TRUNCATED]") -> str:
     '''
-    Function to truncate data for CSV writing to avoid field size limit errors.
+    Function to convert data for CSV writing without dropping content.
     * Takes in `data` of any type and converts to string
-    * Takes in `max_length` of type `int` - maximum allowed length (default: 131000, leaving room for suffix)
-    * Takes in `suffix` of type `str` - text to append when truncated
-    * Returns truncated string if data exceeds max_length
+    * `max_length` and `suffix` are retained for callers that still pass them
     '''
-    try:
-        # Convert data to string
-        str_data = str(data) if data is not None else ""
-        
-        # If within limit, return as-is
-        if len(str_data) <= max_length:
-            return str_data
-        
-        # Truncate and add suffix
-        truncated = str_data[:max_length - len(suffix)] + suffix
-        return truncated
-    except Exception as e:
-        return f"[ERROR CONVERTING DATA: {e}]"
+    return stringify_for_csv(data)
