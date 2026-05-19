@@ -19,9 +19,6 @@ import csv
 import re
 import pyautogui
 
-# Set CSV field size limit to prevent field size errors
-csv.field_size_limit(1000000)  # Set to 1MB instead of default 131KB
-
 from random import choice, shuffle, randint
 from datetime import datetime
 
@@ -41,6 +38,7 @@ from config.settings import *
 from modules.open_chrome import *
 from modules.helpers import *
 from modules.clickers_and_finders import *
+from modules.csv_utils import raise_csv_field_size_limit
 from modules.validator import validate_config
 from modules.ai.openaiConnections import ai_create_openai_client, ai_extract_skills, ai_answer_question, ai_close_openai_client
 from modules.ai.deepseekConnections import deepseek_create_client, deepseek_extract_skills, deepseek_answer_question
@@ -50,6 +48,7 @@ from typing import Literal
 
 
 pyautogui.FAILSAFE = False
+raise_csv_field_size_limit()
 # if use_resume_generator:    from resume_generator import is_logged_in_GPT, login_GPT, open_resume_chat, create_custom_resume
 
 
@@ -796,7 +795,7 @@ def failed_job(job_id: str, job_link: str, resume: str, date_listed, error: str,
             fieldnames = ['Job ID', 'Job Link', 'Resume Tried', 'Date listed', 'Date Tried', 'Assumed Reason', 'Stack Trace', 'External Job link', 'Screenshot Name']
             writer = csv.DictWriter(file, fieldnames=fieldnames)
             if file.tell() == 0: writer.writeheader()
-            writer.writerow({'Job ID':truncate_for_csv(job_id), 'Job Link':truncate_for_csv(job_link), 'Resume Tried':truncate_for_csv(resume), 'Date listed':truncate_for_csv(date_listed), 'Date Tried':datetime.now(), 'Assumed Reason':truncate_for_csv(error), 'Stack Trace':truncate_for_csv(exception), 'External Job link':truncate_for_csv(application_link), 'Screenshot Name':truncate_for_csv(screenshot_name)})
+            writer.writerow({'Job ID':prepare_for_csv(job_id), 'Job Link':prepare_for_csv(job_link), 'Resume Tried':prepare_for_csv(resume), 'Date listed':prepare_for_csv(date_listed), 'Date Tried':datetime.now(), 'Assumed Reason':prepare_for_csv(error), 'Stack Trace':prepare_for_csv(exception), 'External Job link':prepare_for_csv(application_link), 'Screenshot Name':prepare_for_csv(screenshot_name)})
             file.close()
     except Exception as e:
         print_lg("Failed to update failed jobs list!", e)
@@ -830,11 +829,11 @@ def submitted_jobs(job_id: str, title: str, company: str, work_location: str, wo
             fieldnames = ['Job ID', 'Title', 'Company', 'Work Location', 'Work Style', 'About Job', 'Experience required', 'Skills required', 'HR Name', 'HR Link', 'Resume', 'Re-posted', 'Date Posted', 'Date Applied', 'Job Link', 'External Job link', 'Questions Found', 'Connect Request']
             writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
             if csv_file.tell() == 0: writer.writeheader()
-            writer.writerow({'Job ID':truncate_for_csv(job_id), 'Title':truncate_for_csv(title), 'Company':truncate_for_csv(company), 'Work Location':truncate_for_csv(work_location), 'Work Style':truncate_for_csv(work_style), 
-                            'About Job':truncate_for_csv(description), 'Experience required': truncate_for_csv(experience_required), 'Skills required':truncate_for_csv(skills), 
-                                'HR Name':truncate_for_csv(hr_name), 'HR Link':truncate_for_csv(hr_link), 'Resume':truncate_for_csv(resume), 'Re-posted':truncate_for_csv(reposted), 
-                                'Date Posted':truncate_for_csv(date_listed), 'Date Applied':truncate_for_csv(date_applied), 'Job Link':truncate_for_csv(job_link), 
-                                'External Job link':truncate_for_csv(application_link), 'Questions Found':truncate_for_csv(questions_list), 'Connect Request':truncate_for_csv(connect_request)})
+            writer.writerow({'Job ID':prepare_for_csv(job_id), 'Title':prepare_for_csv(title), 'Company':prepare_for_csv(company), 'Work Location':prepare_for_csv(work_location), 'Work Style':prepare_for_csv(work_style), 
+                            'About Job':prepare_for_csv(description), 'Experience required': prepare_for_csv(experience_required), 'Skills required':prepare_for_csv(skills), 
+                                'HR Name':prepare_for_csv(hr_name), 'HR Link':prepare_for_csv(hr_link), 'Resume':prepare_for_csv(resume), 'Re-posted':prepare_for_csv(reposted), 
+                                'Date Posted':prepare_for_csv(date_listed), 'Date Applied':prepare_for_csv(date_applied), 'Job Link':prepare_for_csv(job_link), 
+                                'External Job link':prepare_for_csv(application_link), 'Questions Found':prepare_for_csv(questions_list), 'Connect Request':prepare_for_csv(connect_request)})
         csv_file.close()
     except Exception as e:
         print_lg("Failed to update submitted jobs list!", e)
