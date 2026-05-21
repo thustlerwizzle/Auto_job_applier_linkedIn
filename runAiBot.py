@@ -19,9 +19,6 @@ import csv
 import re
 import pyautogui
 
-# Set CSV field size limit to prevent field size errors
-csv.field_size_limit(1000000)  # Set to 1MB instead of default 131KB
-
 from random import choice, shuffle, randint
 from datetime import datetime
 
@@ -42,6 +39,8 @@ from modules.open_chrome import *
 from modules.helpers import *
 from modules.clickers_and_finders import *
 from modules.validator import validate_config
+from modules.csv_utils import csv_file_lock, raise_csv_field_size_limit
+from modules.search_utils import next_date_posted_filter
 from modules.ai.openaiConnections import ai_create_openai_client, ai_extract_skills, ai_answer_question, ai_close_openai_client
 from modules.ai.deepseekConnections import deepseek_create_client, deepseek_extract_skills, deepseek_answer_question
 from modules.ai.geminiConnections import gemini_create_client, gemini_extract_skills, gemini_answer_question
@@ -50,6 +49,7 @@ from typing import Literal
 
 
 pyautogui.FAILSAFE = False
+raise_csv_field_size_limit()
 # if use_resume_generator:    from resume_generator import is_logged_in_GPT, login_GPT, open_resume_chat, create_custom_resume
 
 
@@ -161,10 +161,13 @@ def get_applied_job_ids() -> set:
     '''
     job_ids = set()
     try:
-        with open(file_name, 'r', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            for row in reader:
-                job_ids.add(row[0])
+        with csv_file_lock(file_name):
+            with open(file_name, 'r', encoding='utf-8') as file:
+                reader = csv.reader(file)
+                for row in reader:
+                    if not row or row[0] == "Job ID":
+                        continue
+                    job_ids.add(row[0])
     except FileNotFoundError:
         print_lg(f"The CSV file '{file_name}' does not exist.")
     return job_ids
@@ -505,10 +508,16 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                                 answer = option
                                 foundOption = True
                                 break
+                        if foundOption: break
                     if not foundOption:
                         #TODO: Use AI to answer the question need to be implemented logic to extract the options for the question
                         print_lg(f'Failed to find an option with text "{answer}" for question labelled "{label_org}", answering randomly!')
-                        select.select_by_index(randint(1, len(select.options)-1))
+                        if len(select.options) > 1:
+                            select.select_by_index(randint(1, len(select.options)-1))
+                        elif len(select.options) == 1:
+                            select.select_by_index(0)
+                        else:
+                            raise NoSuchElementException("Select question has no options to choose from.")
                         answer = select.first_selected_option.text
                         randomly_answered_questions.add((f'{label_org} [ {options} ]',"select"))
             questions_list.add((f'{label_org} [ {options} ]', answer, "select", prev_answer))
@@ -666,6 +675,7 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
         # Check if it's a textarea question
         text_area = try_xp(Question, ".//textarea", False)
         if text_area:
+            do_actions = False
             label = try_xp(Question, ".//label[@for]", False)
             label_org = label.text if label else "Unknown"
             label = label_org.lower()
@@ -792,12 +802,12 @@ def failed_job(job_id: str, job_link: str, resume: str, date_listed, error: str,
     Function to update failed jobs list in excel
     '''
     try:
-        with open(failed_file_name, 'a', newline='', encoding='utf-8') as file:
-            fieldnames = ['Job ID', 'Job Link', 'Resume Tried', 'Date listed', 'Date Tried', 'Assumed Reason', 'Stack Trace', 'External Job link', 'Screenshot Name']
-            writer = csv.DictWriter(file, fieldnames=fieldnames)
-            if file.tell() == 0: writer.writeheader()
-            writer.writerow({'Job ID':truncate_for_csv(job_id), 'Job Link':truncate_for_csv(job_link), 'Resume Tried':truncate_for_csv(resume), 'Date listed':truncate_for_csv(date_listed), 'Date Tried':datetime.now(), 'Assumed Reason':truncate_for_csv(error), 'Stack Trace':truncate_for_csv(exception), 'External Job link':truncate_for_csv(application_link), 'Screenshot Name':truncate_for_csv(screenshot_name)})
-            file.close()
+        with csv_file_lock(failed_file_name):
+            with open(failed_file_name, 'a', newline='', encoding='utf-8') as file:
+                fieldnames = ['Job ID', 'Job Link', 'Resume Tried', 'Date listed', 'Date Tried', 'Assumed Reason', 'Stack Trace', 'External Job link', 'Screenshot Name']
+                writer = csv.DictWriter(file, fieldnames=fieldnames)
+                if file.tell() == 0: writer.writeheader()
+                writer.writerow({'Job ID':truncate_for_csv(job_id), 'Job Link':truncate_for_csv(job_link), 'Resume Tried':truncate_for_csv(resume), 'Date listed':truncate_for_csv(date_listed), 'Date Tried':datetime.now(), 'Assumed Reason':truncate_for_csv(error), 'Stack Trace':truncate_for_csv(exception), 'External Job link':truncate_for_csv(application_link), 'Screenshot Name':truncate_for_csv(screenshot_name)})
     except Exception as e:
         print_lg("Failed to update failed jobs list!", e)
         pyautogui.alert("Failed to update the excel of failed jobs!\nProbably because of 1 of the following reasons:\n1. The file is currently open or in use by another program\n2. Permission denied to write to the file\n3. Failed to find the file", "Failed Logging")
@@ -826,16 +836,16 @@ def submitted_jobs(job_id: str, title: str, company: str, work_location: str, wo
     Function to create or update the Applied jobs CSV file, once the application is submitted successfully
     '''
     try:
-        with open(file_name, mode='a', newline='', encoding='utf-8') as csv_file:
-            fieldnames = ['Job ID', 'Title', 'Company', 'Work Location', 'Work Style', 'About Job', 'Experience required', 'Skills required', 'HR Name', 'HR Link', 'Resume', 'Re-posted', 'Date Posted', 'Date Applied', 'Job Link', 'External Job link', 'Questions Found', 'Connect Request']
-            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-            if csv_file.tell() == 0: writer.writeheader()
-            writer.writerow({'Job ID':truncate_for_csv(job_id), 'Title':truncate_for_csv(title), 'Company':truncate_for_csv(company), 'Work Location':truncate_for_csv(work_location), 'Work Style':truncate_for_csv(work_style), 
-                            'About Job':truncate_for_csv(description), 'Experience required': truncate_for_csv(experience_required), 'Skills required':truncate_for_csv(skills), 
-                                'HR Name':truncate_for_csv(hr_name), 'HR Link':truncate_for_csv(hr_link), 'Resume':truncate_for_csv(resume), 'Re-posted':truncate_for_csv(reposted), 
-                                'Date Posted':truncate_for_csv(date_listed), 'Date Applied':truncate_for_csv(date_applied), 'Job Link':truncate_for_csv(job_link), 
-                                'External Job link':truncate_for_csv(application_link), 'Questions Found':truncate_for_csv(questions_list), 'Connect Request':truncate_for_csv(connect_request)})
-        csv_file.close()
+        with csv_file_lock(file_name):
+            with open(file_name, mode='a', newline='', encoding='utf-8') as csv_file:
+                fieldnames = ['Job ID', 'Title', 'Company', 'Work Location', 'Work Style', 'About Job', 'Experience required', 'Skills required', 'HR Name', 'HR Link', 'Resume', 'Re-posted', 'Date Posted', 'Date Applied', 'Job Link', 'External Job link', 'Questions Found', 'Connect Request']
+                writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+                if csv_file.tell() == 0: writer.writeheader()
+                writer.writerow({'Job ID':truncate_for_csv(job_id), 'Title':truncate_for_csv(title), 'Company':truncate_for_csv(company), 'Work Location':truncate_for_csv(work_location), 'Work Style':truncate_for_csv(work_style), 
+                                'About Job':truncate_for_csv(description), 'Experience required': truncate_for_csv(experience_required), 'Skills required':truncate_for_csv(skills), 
+                                    'HR Name':truncate_for_csv(hr_name), 'HR Link':truncate_for_csv(hr_link), 'Resume':truncate_for_csv(resume), 'Re-posted':truncate_for_csv(reposted), 
+                                    'Date Posted':truncate_for_csv(date_listed), 'Date Applied':truncate_for_csv(date_applied), 'Job Link':truncate_for_csv(job_link), 
+                                    'External Job link':truncate_for_csv(application_link), 'Questions Found':truncate_for_csv(questions_list), 'Connect Request':truncate_for_csv(connect_request)})
     except Exception as e:
         print_lg("Failed to update submitted jobs list!", e)
         pyautogui.alert("Failed to update the excel of applied jobs!\nProbably because of 1 of the following reasons:\n1. The file is currently open or in use by another program\n2. Permission denied to write to the file\n3. Failed to find the file", "Failed Logging")
@@ -1046,7 +1056,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                     print_lg("Since, Submit Application failed, discarding the job application...")
                                     # if screenshot_name == "Not Available":  screenshot_name = screenshot(driver, job_id, "Failed to click Submit application")
                                     # else:   screenshot_name = [screenshot_name, screenshot(driver, job_id, "Failed to click Submit application")]
-                                    if errored == "nose": raise Exception("Failed to click Submit application 😑")
+                                    raise Exception("Failed to click Submit application 😑")
 
 
                         except Exception as e:
@@ -1173,9 +1183,8 @@ def main() -> None:
         total_runs = run(total_runs)
         while(run_non_stop):
             if cycle_date_posted:
-                date_options = ["Any time", "Past month", "Past week", "Past 24 hours"]
                 global date_posted
-                date_posted = date_options[date_options.index(date_posted)+1 if date_options.index(date_posted)+1 > len(date_options) else -1] if stop_date_cycle_at_24hr else date_options[0 if date_options.index(date_posted)+1 >= len(date_options) else date_options.index(date_posted)+1]
+                date_posted = next_date_posted_filter(date_posted, stop_date_cycle_at_24hr)
             if alternate_sortby:
                 global sort_by
                 sort_by = "Most recent" if sort_by == "Most relevant" else "Most relevant"
