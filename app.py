@@ -1,11 +1,12 @@
 from flask import Flask, request, jsonify, render_template
-from flask_cors import CORS
 import csv
 from datetime import datetime
 import os
 
+from modules.csv_utils import csv_file_lock, raise_csv_field_size_limit, write_dict_rows_atomically
+
 app = Flask(__name__)
-CORS(app)
+raise_csv_field_size_limit()
 
 PATH = 'all excels/'
 ##> ------ Karthik Sarode : karthik.sarode23@gmail.com - UI for excel files ------
@@ -68,24 +69,22 @@ def update_applied_date(job_id):
         if not os.path.exists(csvPath):
             return jsonify({"error": f"CSV file not found at {csvPath}"}), 404
             
-        # Read current CSV content
-        with open(csvPath, 'r', encoding='utf-8') as file:
-            reader = csv.DictReader(file)
-            fieldNames = reader.fieldnames
-            found = False
-            for row in reader:
-                if row['Job ID'] == job_id:
-                    row['Date Applied'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    found = True
-                data.append(row)
-        
-        if not found:
-            return jsonify({"error": f"Job ID {job_id} not found"}), 404
+        with csv_file_lock(csvPath):
+            # Read current CSV content
+            with open(csvPath, 'r', encoding='utf-8') as file:
+                reader = csv.DictReader(file)
+                fieldNames = reader.fieldnames
+                found = False
+                for row in reader:
+                    if row['Job ID'] == job_id:
+                        row['Date Applied'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        found = True
+                    data.append(row)
+            
+            if not found:
+                return jsonify({"error": f"Job ID {job_id} not found"}), 404
 
-        with open(csvPath, 'w', encoding='utf-8', newline='') as file:
-            writer = csv.DictWriter(file, fieldnames=fieldNames)
-            writer.writeheader()
-            writer.writerows(data)
+            write_dict_rows_atomically(csvPath, fieldNames, data)
         
         return jsonify({"message": "Date Applied updated successfully"}), 200
     except Exception as e:
@@ -93,6 +92,6 @@ def update_applied_date(job_id):
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='127.0.0.1', debug=False)
 
 ##<
