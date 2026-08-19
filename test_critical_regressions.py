@@ -1,8 +1,13 @@
 import csv
 import io
+import sys
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import MagicMock
+
+# helpers.py imports pyautogui at module load; stub it so tests can run headless.
+sys.modules.setdefault("pyautogui", MagicMock())
 
 import modules.validator as validator
 from modules.csv_utils import raise_csv_field_size_limit
