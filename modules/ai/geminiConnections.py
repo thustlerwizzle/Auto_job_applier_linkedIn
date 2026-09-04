@@ -48,6 +48,7 @@ def gemini_create_client():
         
         return model
     except Exception as e:
+        global showAiErrorAlerts
         error_message = f"Error occurred while configuring Gemini client. Make sure your API key and model name are correct."
         critical_error_log(error_message, e)
         if showAiErrorAlerts:
