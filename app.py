@@ -4,6 +4,10 @@ import csv
 from datetime import datetime
 import os
 
+from modules.csv_utils import raise_csv_field_size_limit
+
+raise_csv_field_size_limit()
+
 app = Flask(__name__)
 CORS(app)
 
