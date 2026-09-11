@@ -15,6 +15,7 @@ def deepseek_create_client() -> OpenAI | None:
     Creates a DeepSeek client using the OpenAI compatible API.
     * Returns an OpenAI-compatible client configured for DeepSeek
     '''
+    global showAiErrorAlerts
     try:
         print_lg("Creating DeepSeek client...")
         if not use_AI:
